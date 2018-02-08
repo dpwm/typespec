@@ -5,7 +5,7 @@ module Converter = struct
   };;
 end;;
 
-module Record = struct
+module Record' = struct
   type ('a, 'b, 'composite) t = {
     composite : 'composite;
     converter : ('a, 'b) Converter.t;
@@ -13,15 +13,15 @@ module Record = struct
   }
 end;;
 
-module Tuple = struct
+module Tuple' = struct
   type ('a, 'b, 'composite) t = {
     composite : 'composite;
     converter : ('a, 'b) Converter.t;
   }
-
 end;;
 
 (* TODO: add a custom type *)
+
 
 type 'a t =
   | Unit  : unit t
@@ -33,14 +33,33 @@ type 'a t =
   | List : 'a t -> 'a list t
   | Array : 'a t -> 'a array t
 
-  | Tuple : ('a, 'b, 'b composite) Tuple.t -> 'a t
-  | Record : ('a, 'b, 'b composite) Record.t -> 'a t
+  | Tuple : ('a, 'b, 'b composite) Tuple'.t -> 'a t
+  | Record : ('a, 'b, 'b composite) Record'.t -> 'a t
 
 
 and 'a composite =
-  | Field: ('b t * 'c composite) -> ('b * 'c) composite
+  | Field: ('b t * 'c composite) -> ('b t * 'c) composite
   | End : unit composite
 
+
+(* We need an existential type to allow a callback to work. *)
+type ts = Typespec : 'a t -> ts;;
+let ts : type a. a t -> ts = fun x -> Typespec x;;
+
+(* Handle the case where we wish to map a composite type to a list *)
+let rec composite_map : type a b. (ts -> 'd) -> a composite -> 'd list =
+  fun f -> function
+    | Field (x, xs) -> (x |> ts |> f) :: composite_map f xs
+    | End -> []
+;;
+
+module Tuple = struct
+  include Tuple'
+end;;
+
+module Record = struct
+  include Record'
+end;;
 
 let unit = Unit;;
 let int = Int;;
@@ -78,15 +97,33 @@ let tuple3 t1 t2 t3 =
 let record composite converter fieldnames = Record {
   Record.fieldnames; composite; converter}
 
-(* A simple example of how to define a record.
-type xt = {
-  a: int;
-  b: int;
-  c: int;
-}
+(* We will need a callback to be passed into the serializer. This will
+ * effectively be a way to call the parent function that calls it. This allows
+ * for really nice things to be done.*)
 
-let xtt = 
-  let get {a; b; c} = (a, (b, (c, ()))) in
-  let set (a, (b, (c, ()))) = {a; b; c} in
-  record (field int @@ field int @@ field int @@ endf) {Converter.get; set} ["a"; "b"; "c"];;
-*)
+type 'st serializer_callback = SerializerCallback : ('a t -> 'a -> 'st) -> 'st serializer_callback;;
+let serializer_callback x = SerializerCallback x
+
+module type Serializer = sig
+  type st 
+  val of_unit : unit -> st
+  val of_int : int -> st
+  val of_float : float -> st
+  val of_bool : bool -> st
+  val of_string : string -> st
+  val of_tuple : st serializer_callback -> ('b, 'c, 'd) Tuple.t -> 'b -> st
+end;;
+
+
+module JsJsonSerializer : Serializer = struct
+  open Js.Json
+
+  type st = Js.Json.t
+  let of_unit () = number 0.
+  let of_float = number
+  let of_int x = x |> float_of_int |> number
+  let of_bool x = (if x then 1 else 0) |> of_int
+  let of_string = Js.Json.string
+  let of_tuple f {Tuple.converter; composite} x =
+    failwith "foo"
+end;;
