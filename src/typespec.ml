@@ -149,13 +149,6 @@ module JsJsonSerializer : Serializer with type st = Js.Json.t = struct
 end;;
 
 
-
-(* Too many functors *)
-
-type 'a v = 'a t;;
-
-(* Do not worry so much about the functors for now *)
-
 let rec apply_composite : type a. (a, 'st) Ser.t -> a -> 'st list =
   fun s x -> 
   match s with
@@ -187,18 +180,3 @@ module MakeSerializer (S : Serializer) = struct
       | End -> Ser.E
   ;;
 end;;
-
-type 'a tree = 
-  | Tree : ('a t * 'b tree) -> ('a * 'b) tree
-  | TEnd : unit tree
-
-let (@>>>) a b = Tree (a, b)
-
-
-(* This is great and we can do something with it. *)
-let () =
-
-
-
-  ()
-
