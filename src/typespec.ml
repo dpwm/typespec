@@ -20,9 +20,6 @@ module Tuple' = struct
   }
 end;;
 
-(* TODO: add a custom type *)
-
-
 type 'a t =
   | Int   : int t
   | Float : float t
@@ -83,6 +80,8 @@ let bool = Bool;;
 
 let list t = List t;;
 let array t = Array t;;
+
+let custom t get set = Custom (t, {get; set})
 
 (* Just focus on the common case with the tuples. If anybody wants really
  * long tuples we're not stopping them writing converters, just not
