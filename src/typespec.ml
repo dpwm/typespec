@@ -29,6 +29,8 @@ type 'a t =
   | String : string t
   | Bool  : bool t
 
+  | Custom : 'b t * ('a, 'b) Converter.t -> 'a t
+
   | List : 'a t -> 'a list t
   | Array : 'a t -> 'a array t
 
@@ -171,6 +173,9 @@ module MakeSerializer (S : Serializer) = struct
       | Array t -> t |> serialize |> S.of_array
       | Int -> S.of_int
       | Float -> S.of_float
+      | Custom (st, converter) ->
+          let f = serialize st in
+          fun x -> x |> converter.get |> f
       | Tuple {composite; converter} -> 
           let f = 
             composite |> 
@@ -210,6 +215,9 @@ module MakeDeserializer (S : Deserializer) = struct
       | Array t -> t |> deserialize |> S.to_array
       | Int -> S.to_int
       | Float -> S.to_float
+      | Custom (t, converter) ->
+          let f = deserialize t in
+          fun x -> x |> f |> converter.set
       | Tuple {composite; converter} -> 
           let f = 
             composite |> 
