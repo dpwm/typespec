@@ -1,16 +1,14 @@
+# Typespec
 
+Compile-time type-safe run-time type library for OCaml.
 
-# Build
-```
-npm run build
-```
+Use cases:
+ * Serialization
+ * Deserialization
+ * Defaults
 
-# Watch
+Works with records, tuples and arbitrary (custom) types using easy-to-write converters.
 
-```
-npm run watch
-```
+## Motivation
 
-
-# Editor
-If you use `vscode`, Press `Windows + Shift + B` it will build automatically
+This library came about on a personal project that saw the benefits of OCaml and bucklescript, but resulted in a large amount of time being spent in writing serializers and de-serializers.
