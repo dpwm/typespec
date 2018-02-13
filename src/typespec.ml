@@ -24,7 +24,6 @@ end;;
 
 
 type 'a t =
-  | Unit  : unit t
   | Int   : int t
   | Float : float t
   | String : string t
@@ -41,16 +40,30 @@ and 'a composite =
   | End : unit composite
 
 
-module Ser = struct
-  type 'a v = 'a t
+module CompositeSerializer = struct
   type ('a, 'st) t = 
     | F: (('a -> 'st) * ('b, 'st) t) -> ('a * 'b, 'st) t
     | E: (unit, 'st) t 
 
-  let (@@>>>) a b = F (a, b)
-  let e = E
-end
-;;
+  let rec apply: type a. (a, 'st) t -> a -> 'st list =
+    fun s x -> 
+    match s with
+      | F (f, fxs) -> (f (fst x)) :: apply fxs (snd x)
+      | E -> []
+end;;
+
+module CompositeDeserializer = struct
+  type ('a, 'st) t = 
+    | F: (('st -> 'a) * ('b, 'st) t) -> ('a * 'b, 'st) t
+    | E: (unit, 'st) t 
+
+  let rec apply: type a. (a, 'st) t -> 'st list -> a =
+    fun s xs -> 
+    match s with
+      | F (f, fxs) -> (List.hd xs |> f, apply fxs (List.tl xs))
+      | E -> ()
+
+end;;
 
 module Tuple = struct
   include Tuple'
@@ -61,7 +74,6 @@ module Record = struct
 end;;
 
 
-let unit = Unit;;
 let int = Int;;
 let float = Float;;
 let string = String;;
@@ -107,7 +119,6 @@ module type Serializer = sig
   type st 
 
 
-  val of_unit : unit -> st
   val of_int : int -> st
   val of_float : float -> st
   val of_bool : bool -> st
@@ -116,52 +127,44 @@ module type Serializer = sig
   val of_list : ('a -> st) -> 'a list -> st
   val of_array : ('a -> st) -> 'a array -> st
 
-  (* This will be the most complicated one, because until now we have only
-   * returned a function. Ideally we would return a closure here *)
+  val of_tuple : 
+    ('a, st) CompositeSerializer.t -> 'a -> st
+  val of_record :
+    string list -> ('a, st) CompositeSerializer.t -> 'a -> st
+end;;
+  
+module type Deserializer = sig
+  type st 
 
-  val of_tuple : ('a, st) Ser.t -> 'a -> st
+  val to_int : st -> int
+  val to_float : st -> float
+  val to_bool : st -> bool
+  val to_string : st -> string
 
+  val to_list : (st -> 'a) -> st -> 'a list
+  val to_array : (st -> 'a) -> st -> 'a array
+
+  val to_tuple :
+    ('a, st) CompositeDeserializer.t -> st -> 'a
+
+  val to_record : 
+    string list -> ('a, st) CompositeDeserializer.t ->  st -> 'a
 end;;
 
-
-
-
-
-module JsJsonSerializer : Serializer with type st = Js.Json.t = struct
-
-  type st = Js.Json.t
-
-  open Js.Json
-
-
-  let of_unit () = number 0.
-  let of_float = number
-  let of_int x = x |> float_of_int |> number
-  let of_bool x = (if x then 1 else 0) |> of_int
-  let of_string = Js.Json.string
-
-  let of_list f = fun x -> x |> List.map f |> Array.of_list |> Js.Json.array
-  let of_array f = fun x -> x |> Array.map f |> Js.Json.array
-
-  let of_tuple _ = 
-    failwith "foo"
-  ;;
-end;;
-
-
-let rec apply_composite : type a. (a, 'st) Ser.t -> a -> 'st list =
-  fun s x -> 
-  match s with
-    | Ser.F (f, fxs) -> (f (fst x)) :: apply_composite fxs (snd x)
-    | Ser.E -> []
-;;
 
 module MakeSerializer (S : Serializer) = struct
   type st = S.st
 
+  type 'a cst = ('a, st) CompositeSerializer.t
+
   let rec serialize : type a. a t -> (a -> st) =
+    let rec serialize_composite : type a. a composite -> a cst =
+      let open CompositeSerializer in
+      function
+        | Field (x, xs) -> F (serialize x, serialize_composite xs)
+        | End -> E
+    in
     function 
-      | Unit -> S.of_unit
       | String -> S.of_string
       | Bool -> S.of_bool
       | List t -> t |> serialize |> S.of_list
@@ -169,14 +172,61 @@ module MakeSerializer (S : Serializer) = struct
       | Int -> S.of_int
       | Float -> S.of_float
       | Tuple {composite; converter} -> 
-          let scomp = composite |> serialize_composite in
+          let f = 
+            composite |> 
+            serialize_composite |> 
+            S.of_tuple in
           fun x -> 
-            x |> converter.get |> S.of_tuple scomp
+            x |> converter.get |> f 
 
-      | Record _ -> failwith "not implemented"
-  and serialize_composite : type a. a composite -> (a, st) Ser.t =
-    function
-      | Field (x, xs) -> Ser.F (serialize x, serialize_composite xs)
-      | End -> Ser.E
+      | Record {composite; converter; fieldnames} ->
+          let f = 
+            composite |> 
+            serialize_composite |> 
+            S.of_record fieldnames
+          in
+          fun x ->
+            x |> converter.get |> f
+
   ;;
 end;;
+
+module MakeDeserializer (S : Deserializer) = struct
+  type st = S.st
+
+  type 'a cst = ('a, st) CompositeDeserializer.t
+
+  let rec deserialize : type a. a t -> (st -> a) =
+    let rec deserialize_composite : type a. a composite -> a cst =
+      let open CompositeDeserializer in
+      function
+        | Field (x, xs) -> F (deserialize x, deserialize_composite xs)
+        | End -> E
+    in
+    function 
+      | String -> S.to_string
+      | Bool -> S.to_bool
+      | List t -> t |> deserialize |> S.to_list
+      | Array t -> t |> deserialize |> S.to_array
+      | Int -> S.to_int
+      | Float -> S.to_float
+      | Tuple {composite; converter} -> 
+          let f = 
+            composite |> 
+            deserialize_composite |> 
+            S.to_tuple in
+          fun x -> 
+            x |> f |> converter.set
+
+      | Record {composite; converter; fieldnames} ->
+          let f = 
+            composite |> 
+            deserialize_composite |> 
+            S.to_record fieldnames
+          in
+          fun x ->
+            x |> f |> converter.set 
+
+  ;;
+end;;
+
