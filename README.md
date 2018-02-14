@@ -66,13 +66,16 @@ Output:
 
 This library came about on a personal project that saw the benefits of OCaml for systems programming and bucklescript for frontend programming, but resulted in a large amount of time being spent in writing serializers and de-serializers.
 
-In a dynamic language we could use introspection or reflection to obtain information about types at run-time. OCaml does not have such tools.
-
+In a dynamic language we could use introspection or reflection to obtain information about types at run-time. Even if we had those tools, there is still an innate advantage in using a more structure representation. Python has [marshmallow](https://github.com/marshmallow-code/marshmallow) which requires duplication. Typespec can be thought of as a similar tool for Ocaml.
 
 ## How it works
 
-There is no magic in typespec. Behind the scenes there are only GADTs and
-suitable recursive data structures. 
+There is no magic in typespec. There is no Obj.magic.  Behind the scenes
+there are only GADTs and suitable recursive data structures. A mapping from
+the type described by the typespec is created when the typespec is passed to
+the serializer function.
+
+Internally, every function lookup is done at serializer creation time. This means that there is no lookup during serialization, only when the serializer is created. In this way the closure returned can be thought of as executing a bytecode with function pointers. The type system guarantees that what we pass in is structurally compatible.
 
 ## State
 
@@ -84,3 +87,4 @@ types may be added.
 
 * Support variants
 * Support optional types
+* Improve performance
