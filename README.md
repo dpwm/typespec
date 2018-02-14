@@ -58,6 +58,11 @@ let () =
 
 ```
 
+Output:
+```json
+{ "numtype": "mobile", "number": "00000-000000" }
+```
+
 
 ## How it works
 
