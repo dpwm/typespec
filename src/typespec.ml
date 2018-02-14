@@ -110,8 +110,7 @@ let tuple3 t1 t2 t3 =
     composite = field t1 @@ field t2 @@ field t3 @@ End
   };;
 
-let record composite converter fieldnames = Record {
-  Record.fieldnames; composite; converter}
+let record (r : (_, _, _) Record.t) = Record r
 
 module type S = sig
   type 'a t
