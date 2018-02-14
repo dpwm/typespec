@@ -88,5 +88,6 @@ types may be added.
 
 * Support variants
 * Support optional types
-* Measure performance (roughly one parse / decode time penalty at present -- so if parsing takes n ms then transforming takes n ms)
+* Measure performance (roughly one parse / serialize time penalty at present -- so if parsing takes n ms then transforming takes n ms)
 * Explore tuples
+* Explore variants
