@@ -3,6 +3,8 @@ module Converter = struct
     get: 'a -> 'b;
     set: 'b -> 'a;
   };;
+
+  let make get set = {get; set};;
 end;;
 
 module Record' = struct
@@ -114,6 +116,33 @@ let record composite converter fieldnames = Record {
 module type S = sig
   type 'a t
 end;;
+
+
+let rec default : type a. a t -> a =
+  let rec default_composite : type a. a composite -> a = 
+    function
+      | Field (x, xs) -> (default x, default_composite xs)
+      | End -> ()
+  in
+  function
+    | Int -> 0
+    | Float -> 0.
+    | Bool -> false
+    | String -> ""
+
+    | Custom (a, {set}) -> a |> default |> set
+
+    | Array _ -> [| |]
+    | List _ -> []
+
+    | Tuple {converter; composite} -> 
+        composite |> default_composite |> converter.set
+
+    | Record {converter; composite} -> 
+        composite |> default_composite |> converter.set
+
+
+;;
 
 
 module type Serializer = sig
