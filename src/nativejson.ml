@@ -14,7 +14,8 @@ module JsonSerializer : Serializer with type st = Yojson.Basic.json = struct
   let of_tuple cser x =
     `List (CompositeSerializer.apply cser x)
 
-  let of_record _ = of_tuple
+  let of_record fieldnames cser x =
+    `Assoc (List.combine fieldnames (CompositeSerializer.apply cser x))
 end;;
 
 module Serializer = Typespec.MakeSerializer(JsonSerializer)
